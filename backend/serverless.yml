@@ -1,0 +1,55 @@
+service: crispurl
+frameworkVersion: "3"
+useDotenv: true
+
+provider:
+  name: aws
+  region: us-east-1
+  iam:
+    role: "arn:aws:iam::${aws:accountId}:role/crispurl/lambda-${sls:stage}"
+  runtime: go1.x
+  memorySize: 128
+  timeout: 10
+  lambdaHashingVersion: [20201221]
+  apiGateway:
+    usagePlan:
+      throttle:
+        burstLimit: 2
+        rateLimit: 1
+  environment:
+    API_BASE_URL: ${ssm:/crispurl/${sls:stage}/API_BASE_URL}
+    ENV: ${sls:stage}
+    REGION: ${self:provider.region}
+    LOG_LEVEL: ${self:custom.stages.${sls:stage}.log-level}
+
+custom:
+  stages:
+    dev:
+      cors: true
+      log-level: "INFO"
+    prd:
+      cors: false
+      log-level: "WARN"
+
+package:
+  patterns:
+    - "!./**"
+    - ./bin/**
+
+functions:
+  get-redirect:
+    handler: bin/get-redirect/main
+    environment: ${file(./functions/get-redirect/env.${sls:stage}.json)}
+    events:
+      - http:
+          path: /{shortnerID}
+          method: get
+          cors: ${self:custom.stages.${sls:stage}.cors}
+  create-redirect:
+    handler: bin/create-redirect/main
+    environment: ${file(./functions/create-redirect/env.${sls:stage}.json)}
+    events:
+      - http:
+          path: /api/v1/redirect
+          method: post
+          cors: ${self:custom.stages.${sls:stage}.cors}
